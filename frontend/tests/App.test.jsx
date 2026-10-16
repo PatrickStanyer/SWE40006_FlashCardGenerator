@@ -1,0 +1,65 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import App from '../src/App.jsx';
+import { normalizeCards } from '../src/api.js';
+
+const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+
+async function submitTopic(topic = 'Docker') {
+  const user = userEvent.setup();
+  render(<App />);
+  if (topic) await user.type(screen.getByLabelText('Topic'), topic);
+  await user.click(screen.getByRole('button', { name: /generate cards/i }));
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('App', () => {
+  it('posts topic and count to /api/generate and shows the first card', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      ok({ cards: [{ question: 'What is Docker?', answer: 'A container platform.' }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await submitTopic('Docker');
+
+    expect(await screen.findByText('What is Docker?')).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/generate');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ topic: 'Docker', count: 5 });
+  });
+
+  it('blocks empty topics without calling the API', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await submitTopic('');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/enter a topic/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('shows an error when the API responds with a failure status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await submitTopic();
+    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 500');
+  });
+
+  it('shows an error when the server is unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await submitTopic();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach the server/i);
+  });
+});
+
+describe('normalizeCards', () => {
+  it('accepts a bare array of front/back cards', () => {
+    expect(normalizeCards([{ front: 'Q', back: 'A' }])).toEqual([{ id: 0, front: 'Q', back: 'A' }]);
+  });
+
+  it('rejects payloads that contain no card list', () => {
+    expect(() => normalizeCards({ detail: 'nope' })).toThrow(/unexpected response/i);
+  });
+});
