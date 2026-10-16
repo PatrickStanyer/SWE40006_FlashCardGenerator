@@ -171,7 +171,7 @@ export default function App() {
             <p className="eyebrow">WELCOME TO RECALL</p>
             <h2 id="account-title">{accountMode === 'signin' ? 'Good to see you.' : 'Start remembering.'}</h2>
             <p className="dialog-description">{accountMode === 'signin' ? 'Sign in to pick up where you left off.' : 'Create an account and keep your decks close.'}</p>
-            {!supabase && <p className="account-config-note" role="alert">Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env.local, then restart the dev server.</p>}
+            {!supabase && <p className="account-config-note" role="alert">Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the repository-root .env.local, then restart the dev server.</p>}
             <form className="account-form" onSubmit={handleAccountSubmit}>
               {accountMode === 'signup' && <label htmlFor="account-name">Name<input id="account-name" name="name" autoComplete="name" required /></label>}
               <label htmlFor="account-email">Email<input id="account-email" name="email" type="email" autoComplete="email" required /></label>
