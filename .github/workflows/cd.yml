@@ -61,7 +61,10 @@ jobs:
           curl -f http://${{ secrets.EC2_HOST }}:8080
 
   deploy-production:
-     needs: deploy-staging
+     needs:
+       - build
+       - deploy-staging
+
      runs-on: ubuntu-latest
 
      environment:
