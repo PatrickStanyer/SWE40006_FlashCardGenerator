@@ -1,0 +1,4 @@
+services:
+  frontend:
+    image: ${IMAGE_NAME}
+    restart: unless-stopped

@@ -1,0 +1,5 @@
+services:
+  frontend:
+    image: ${IMAGE_NAME}
+    ports:
+      - "8080:80"
