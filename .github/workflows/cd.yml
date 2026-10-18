@@ -56,3 +56,31 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
+      - name: Smoke Test
+        run: |
+          curl -f http://${{ secrets.EC2_HOST }}:8080
+
+  deploy-production:
+     needs: deploy-staging
+     runs-on: ubuntu-latest
+
+     environment:
+       name: production
+
+     steps:
+       - name: Deploy Production
+         uses: appleboy/ssh-action@v1.0.3
+         with:
+           host: ${{ secrets.EC2_HOST }}
+           username: ${{ secrets.EC2_USER }}
+           key: ${{ secrets.EC2_SSH_KEY }}
+           script: |
+             docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
+
+             docker stop flashcard-prod || true
+             docker rm flashcard-prod || true
+
+             docker run -d \
+               --name flashcard-prod \
+               -p 80:80 \
+               ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
