@@ -58,7 +58,7 @@ jobs:
             docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
       - name: Smoke Test
         run: |
-          curl -f http://${{ secrets.EC2_HOST }}:8080/healthz
+          curl -f http://${{ secrets.EC2_HOST }}:8080/
 
   deploy-production:
      needs:
