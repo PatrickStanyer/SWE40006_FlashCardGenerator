@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/flashcard
+  IMAGE_NAME: ghcr.io/patrickstanyer/flashcard
 
 jobs:
   build:
@@ -55,4 +55,4 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            docker pull ghcr.io/${{ github.repository_owner }}/flashcard:${{ needs.build.outputs.image_tag }}
+            docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
