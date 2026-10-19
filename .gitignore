@@ -7,3 +7,16 @@ frontend/node_modules/
 
 dist/
 frontend/dist/
+
+# Test / coverage / tooling artifacts
+coverage/
+frontend/coverage/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.venv/
+venv/
