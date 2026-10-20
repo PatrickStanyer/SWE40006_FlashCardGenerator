@@ -1,0 +1,10 @@
+# Runtime dependencies only. Test and lint tooling lives in requirements-dev.txt
+# so the production image never ships it.
+#
+# Lower bounds rather than exact pins: every image build resolves to the latest
+# patch release, so published security fixes land automatically and the Trivy
+# gate in CI verifies the result on each build.
+fastapi>=0.115.6
+uvicorn[standard]>=0.34.0
+pydantic>=2.10.4
+openai>=1.59.6
