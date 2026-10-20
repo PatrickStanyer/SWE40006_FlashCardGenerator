@@ -110,6 +110,21 @@ def generate_mock_cards(topic: str, count: int) -> list[Card]:
     return cards
 
 
+def _json_from_reply(content: str) -> dict:
+    """Parse a model reply that may or may not be wrapped in a code fence.
+
+    Asking for JSON does not guarantee bare JSON. The same model returns it
+    plain on one call and fenced as a markdown block on the next, and a fence
+    makes json.loads fail on a reply that was otherwise correct.
+    """
+    text = content.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()[1:]  # drop the opening fence and its tag
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = chr(10).join(lines)
+    return json.loads(text or "{}")
+
 def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no cover
     """Build a deck from the configured model.
 
@@ -121,7 +136,11 @@ def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no c
     # Only the key is required. A base URL points the same client at any
     # provider exposing an OpenAI-compatible endpoint, which is how this talks
     # to Gemini without a second SDK or a second code path here.
-    client_options: dict[str, object] = {"api_key": config.OPENAI_API_KEY}
+    client_options: dict[str, object] = {
+        "api_key": config.OPENAI_API_KEY,
+        "timeout": config.OPENAI_TIMEOUT,
+        "max_retries": config.OPENAI_MAX_RETRIES,
+    }
     if config.OPENAI_BASE_URL:
         client_options["base_url"] = config.OPENAI_BASE_URL
 
@@ -139,9 +158,8 @@ def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no c
             model=config.OPENAI_MODEL,
             messages=[{"role": "user", "content": instruction}],
             response_format={"type": "json_object"},
-            timeout=20,
         )
-        payload = json.loads(completion.choices[0].message.content or "{}")
+        payload = _json_from_reply(completion.choices[0].message.content or "")
         raw = payload.get("cards", [])
     except Exception:
         logger.exception("Live generation failed, falling back to deterministic output")
