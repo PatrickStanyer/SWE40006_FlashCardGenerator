@@ -121,9 +121,22 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+      # Same reasoning as the Backend job: the service is still landing, and on
+      # a ref without backend/Dockerfile there is no image to build or scan.
+      - name: Detect backend image
+        id: detect
+        run: |
+          if [ -f backend/Dockerfile ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No backend/Dockerfile on this ref yet, skipping the backend image scan."
+          fi
       - name: Build backend image
+        if: steps.detect.outputs.present == 'true'
         run: docker build -t flashcard-backend:ci ./backend
       - name: Scan backend image
+        if: steps.detect.outputs.present == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: flashcard-backend:ci
