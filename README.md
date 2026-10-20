@@ -43,6 +43,15 @@ The root `.env` file is read by Vite and is ignored by Git. Restart the dev serv
 
 `VITE_API_URL` defaults to `/api`; keep that value for the local Vite proxy unless you intentionally use a different API URL.
 
+## Deploying
+
+The CD workflow builds one frontend image for both staging and production, so configure the shared Supabase project in the repository's **Settings → Secrets and variables → Actions → Variables**:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+These values are embedded into the static frontend at image-build time. The anon/publishable key is intended for browser use; never use a Supabase service-role key here. The workflow fails the frontend image build if either variable is missing.
+
 ## Other Commands
 
 Run the frontend tests:
