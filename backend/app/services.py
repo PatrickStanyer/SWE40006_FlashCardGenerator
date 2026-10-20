@@ -52,6 +52,11 @@ _ANGLES: list[tuple[str, str]] = [
         "Where does {topic} fit into a wider system?",
         "Describe what feeds into {topic} and what consumes its output.",
     ),
+    (
+        "What would break if {topic} were taken away?",
+        "Name what {topic} is currently holding together, and what the fallback "
+        "would cost in time, money or risk.",
+    ),
 ]
 
 # Appended once the deck is long enough to wrap past every angle, so cards in a
