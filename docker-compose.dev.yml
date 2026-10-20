@@ -12,8 +12,9 @@ services:
   frontend:
     build:
       context: ./frontend
+    # Host port 8080 maps to container port 8080 (matching nginx-unprivileged).
     ports:
-      - "8080:80"
+      - "8080:8080"
     depends_on:
       api:
         condition: service_healthy
