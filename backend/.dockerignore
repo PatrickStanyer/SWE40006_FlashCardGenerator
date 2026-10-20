@@ -1,0 +1,15 @@
+# Keep the build context small and keep test tooling, caches and any local
+# secrets out of the image.
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
+tests
+requirements-dev.txt
+.env
+.git

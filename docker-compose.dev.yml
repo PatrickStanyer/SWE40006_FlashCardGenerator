@@ -1,0 +1,34 @@
+# Local development stack. Builds both images from source and wires them the
+# same way Staging and Production are meant to be wired: the browser only ever
+# talks to nginx, which proxies /api and /healthz across the compose network to
+# the backend. Nothing but the web tier is published to the host.
+#
+# The backend service must stay named "api". frontend/nginx.conf resolves
+# http://api:8000 through Docker DNS, so renaming it breaks the proxy even
+# though both containers would still start cleanly.
+#
+# Usage: docker compose -f docker-compose.dev.yml up --build
+services:
+  frontend:
+    build:
+      context: ./frontend
+    # Host port 8080 maps to container port 8080 (matching nginx-unprivileged).
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      # Deterministic offline generation, so the stack runs with no API key.
+      AI_MOCK_MODE: "true"
+      APP_VERSION: "dev"
+    # Deliberately not published to the host: the backend is only reachable
+    # through nginx, which is how it behaves once deployed.
+    expose:
+      - "8000"
+    restart: unless-stopped
