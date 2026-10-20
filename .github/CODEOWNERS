@@ -1,0 +1,32 @@
+# Who gets pulled into review when a pull request touches a path.
+#
+# GitHub requests these reviewers automatically, so nobody has to remember who
+# owns what. Ownership here follows the split the team agreed: Patrick on the
+# host and deployment, Andy on the CI gates, Khoa on the backend service.
+#
+# Later rules win, so the specific entries at the bottom override the broad
+# ones above them.
+#
+# This file only requests reviews. It blocks a merge only if branch protection
+# has "Require review from Code Owners" switched on, which is a repository
+# setting rather than something this file decides.
+
+# Backend service
+/backend/                               @khoastpctpekora
+
+# Continuous integration gates
+/.github/workflows/ci.yml               @minhkhoilovescoding123
+
+# Deployment: pipeline, compose files and the host-facing port mappings
+/.github/workflows/cd.yml               @PatrickStanyer
+/deploy/                                @PatrickStanyer
+/docker-compose.yml                     @PatrickStanyer
+
+# The web tier's container and proxy config decide the published ports, so
+# they belong with deployment rather than with the frontend application code.
+/frontend/Dockerfile                    @PatrickStanyer
+/frontend/nginx.conf                    @PatrickStanyer
+
+# Frontend application code
+/frontend/src/                          @yummysushii
+/frontend/tests/                        @yummysushii
