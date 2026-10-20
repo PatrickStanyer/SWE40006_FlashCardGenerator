@@ -55,9 +55,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
+    # No url here. jobs.<id>.environment.url does not allow the secrets
+    # context, and one disallowed expression makes GitHub reject the whole
+    # workflow, which is why this file ran with zero jobs.
     environment:
       name: staging
-      url: http://${{ secrets.EC2_HOST }}:8080/
 
     steps:
       - name: Deploy to EC2
@@ -146,7 +148,6 @@ jobs:
     # environment hold the release until someone approves it.
     environment:
       name: production
-      url: http://${{ secrets.EC2_HOST }}/
 
     steps:
       - name: Deploy to EC2
