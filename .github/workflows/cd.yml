@@ -1,5 +1,8 @@
 name: CD
 
+# Runs on every push to main. Branch protection already requires the three CI
+# checks to pass before anything can reach main, so a commit arriving here has
+# been linted, tested and scanned.
 on:
   push:
     branches:
@@ -10,10 +13,12 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/patrickstanyer/flashcard
+  FRONTEND_IMAGE: ghcr.io/patrickstanyer/flashcard
+  BACKEND_IMAGE: ghcr.io/patrickstanyer/flashcard-backend
 
 jobs:
   build:
+    name: Build and publish images
     runs-on: ubuntu-latest
 
     outputs:
@@ -22,6 +27,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Both images carry the same commit-derived tag, so a deployment can
+      # always be traced back to the exact commit that produced it.
       - name: Generate image tag
         id: tag
         run: echo "tag=sha-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
@@ -33,57 +40,190 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
+      - name: Build and push frontend image
         run: |
-          docker build \
-            -t $IMAGE_NAME:${{ steps.tag.outputs.tag }} \
-            ./frontend
+          docker build -t "$FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}" ./frontend
+          docker push "$FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}"
 
-      - name: Push image
+      - name: Build and push backend image
         run: |
-          docker push $IMAGE_NAME:${{ steps.tag.outputs.tag }}
+          docker build -t "$BACKEND_IMAGE:${{ steps.tag.outputs.tag }}" ./backend
+          docker push "$BACKEND_IMAGE:${{ steps.tag.outputs.tag }}"
 
   deploy-staging:
+    name: Deploy to staging
     needs: build
     runs-on: ubuntu-latest
+
+    # No url here. jobs.<id>.environment.url does not allow the secrets
+    # context, and one disallowed expression makes GitHub reject the whole
+    # workflow, which is why this file ran with zero jobs.
+    environment:
+      name: staging
 
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          TAG: ${{ needs.build.outputs.image_tag }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY
           script: |
-            docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
-      - name: Smoke Test
+            set -eu
+
+            docker pull "$BACKEND_IMAGE:$TAG"
+            docker pull "$FRONTEND_IMAGE:$TAG"
+
+            # Staging and production each get their own bridge network, so the
+            # two environments cannot reach one another's containers.
+            docker network create flashcard-staging 2>/dev/null || true
+
+            # Replace rather than leave running. Pulling an image on its own
+            # changes nothing, which is why staging used to keep serving an old
+            # build after a successful deployment.
+            docker rm -f flashcard-staging-api flashcard-staging-web 2>/dev/null || true
+
+            # Containers started by hand earlier in the project still hold the
+            # published port under names this job does not know, so match on the
+            # port itself rather than guessing. Without this the web tier fails
+            # with "port is already allocated" after everything else succeeded.
+            for cid in $(docker ps -q --filter "publish=8080"); do
+              echo "Removing container $cid which still holds port 8080"
+              docker rm -f "$cid" || true
+            done
+
+            # The network alias has to be "api": frontend/nginx.conf proxies
+            # /api and /healthz to http://api:8000 over this network.
+            docker run -d \
+              --name flashcard-staging-api \
+              --network flashcard-staging \
+              --network-alias api \
+              --restart unless-stopped \
+              -e APP_VERSION="$TAG" \
+              -e AI_MOCK_MODE=false \
+              -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+              "$BACKEND_IMAGE:$TAG"
+
+            # Only the web tier is published. The backend is reachable through
+            # nginx and nowhere else. An unprivileged nginx listens on 8080.
+            docker run -d \
+              --name flashcard-staging-web \
+              --network flashcard-staging \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              "$FRONTEND_IMAGE:$TAG"
+
+            docker image prune -f
+
+      # Verifies the deployment rather than the server merely being up. The
+      # version check is the important one: it fails if an older container is
+      # still answering, which a plain reachability check would not catch.
+      - name: Smoke test staging
+        env:
+          BASE: http://${{ secrets.EC2_HOST }}:8080
+          TAG: ${{ needs.build.outputs.image_tag }}
         run: |
-          curl -f http://${{ secrets.EC2_HOST }}:8080/
+          set -eu
+          curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/" > /dev/null
+          echo "Page served."
+
+          HEALTH=$(curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/healthz")
+          echo "Health: $HEALTH"
+          echo "$HEALTH" | grep -q "$TAG" \
+            || { echo "Deployed version is not $TAG. An older container is still serving."; exit 1; }
+
+          CARDS=$(curl -fsS -X POST "$BASE/api/generate" \
+            -H 'Content-Type: application/json' \
+            -d '{"topic":"deployment smoke test","count":2}')
+          echo "$CARDS" | grep -q '"front"' \
+            || { echo "Card generation did not return cards."; exit 1; }
+          echo "Card generation reachable through the proxy."
 
   deploy-production:
-     needs:
-       - build
-       - deploy-staging
+    name: Deploy to production
+    needs:
+      - build
+      - deploy-staging
 
-     runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-     environment:
-       name: production
+    # The only manual step in the pipeline. Required reviewers on this
+    # environment hold the release until someone approves it.
+    environment:
+      name: production
 
-     steps:
-       - name: Deploy Production
-         uses: appleboy/ssh-action@v1.0.3
-         with:
-           host: ${{ secrets.EC2_HOST }}
-           username: ${{ secrets.EC2_USER }}
-           key: ${{ secrets.EC2_SSH_KEY }}
-           script: |
-             docker pull ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          TAG: ${{ needs.build.outputs.image_tag }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY
+          script: |
+            set -eu
 
-             docker stop flashcard-prod || true
-             docker rm flashcard-prod || true
+            docker pull "$BACKEND_IMAGE:$TAG"
+            docker pull "$FRONTEND_IMAGE:$TAG"
 
-             docker run -d \
-               --name flashcard-prod \
-               -p 80:80 \
-               ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
+            docker network create flashcard-production 2>/dev/null || true
+
+            # flashcard-prod is the container name the earlier single-container
+            # deployment used; removing it keeps port 80 free.
+            docker rm -f flashcard-prod flashcard-production-api flashcard-production-web 2>/dev/null || true
+
+            for cid in $(docker ps -q --filter "publish=80"); do
+              echo "Removing container $cid which still holds port 80"
+              docker rm -f "$cid" || true
+            done
+
+            docker run -d \
+              --name flashcard-production-api \
+              --network flashcard-production \
+              --network-alias api \
+              --restart unless-stopped \
+              -e APP_VERSION="$TAG" \
+              -e AI_MOCK_MODE=false \
+              -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+              "$BACKEND_IMAGE:$TAG"
+
+            docker run -d \
+              --name flashcard-production-web \
+              --network flashcard-production \
+              --restart unless-stopped \
+              -p 80:8080 \
+              "$FRONTEND_IMAGE:$TAG"
+
+            docker image prune -f
+
+      - name: Smoke test production
+        env:
+          BASE: http://${{ secrets.EC2_HOST }}
+          TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          set -eu
+          curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/" > /dev/null
+          echo "Page served."
+
+          HEALTH=$(curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/healthz")
+          echo "Health: $HEALTH"
+          echo "$HEALTH" | grep -q "$TAG" \
+            || { echo "Deployed version is not $TAG. An older container is still serving."; exit 1; }
+
+          CARDS=$(curl -fsS -X POST "$BASE/api/generate" \
+            -H 'Content-Type: application/json' \
+            -d '{"topic":"deployment smoke test","count":2}')
+          echo "$CARDS" | grep -q '"front"' \
+            || { echo "Card generation did not return cards."; exit 1; }
+          echo "Card generation reachable through the proxy."
