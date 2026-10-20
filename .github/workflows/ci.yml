@@ -51,15 +51,39 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+
+      # The service is still landing. Until backend/requirements.txt exists the
+      # job succeeds with nothing to do, so the required "Backend" check can be
+      # satisfied either way and no pull request is blocked on ordering.
+      #
+      # hashFiles cannot express this. It is unavailable in a job-level if, and
+      # putting it there makes GitHub reject the whole workflow, which is what
+      # stopped every run from starting until now. A step output works and is
+      # checked at the right time.
+      - name: Detect backend service
+        id: detect
+        run: |
+          if [ -f requirements.txt ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No backend/requirements.txt on this ref yet, nothing to check."
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.detect.outputs.present == 'true'
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      - run: pip install -r requirements-dev.txt
+      - name: Install dependencies
+        if: steps.detect.outputs.present == 'true'
+        run: pip install -r requirements-dev.txt
       - name: Lint (Ruff)
+        if: steps.detect.outputs.present == 'true'
         run: ruff check .
       - name: Unit + integration tests with coverage gate (>=80%)
+        if: steps.detect.outputs.present == 'true'
         run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=80
         env:
           AI_MOCK_MODE: "true"
