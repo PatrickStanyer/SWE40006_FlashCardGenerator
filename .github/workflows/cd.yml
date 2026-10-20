@@ -89,6 +89,15 @@ jobs:
             # build after a successful deployment.
             docker rm -f flashcard-staging-api flashcard-staging-web 2>/dev/null || true
 
+            # Containers started by hand earlier in the project still hold the
+            # published port under names this job does not know, so match on the
+            # port itself rather than guessing. Without this the web tier fails
+            # with "port is already allocated" after everything else succeeded.
+            for cid in $(docker ps -q --filter "publish=8080"); do
+              echo "Removing container $cid which still holds port 8080"
+              docker rm -f "$cid" || true
+            done
+
             # The network alias has to be "api": frontend/nginx.conf proxies
             # /api and /healthz to http://api:8000 over this network.
             docker run -d \
@@ -173,6 +182,11 @@ jobs:
             # flashcard-prod is the container name the earlier single-container
             # deployment used; removing it keeps port 80 free.
             docker rm -f flashcard-prod flashcard-production-api flashcard-production-web 2>/dev/null || true
+
+            for cid in $(docker ps -q --filter "publish=80"); do
+              echo "Removing container $cid which still holds port 80"
+              docker rm -f "$cid" || true
+            done
 
             docker run -d \
               --name flashcard-production-api \
