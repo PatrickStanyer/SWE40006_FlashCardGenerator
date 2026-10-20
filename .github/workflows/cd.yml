@@ -85,5 +85,5 @@ jobs:
 
              docker run -d \
                --name flashcard-prod \
-               -p 80:80 \
+               -p 80:8080 \
                ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
