@@ -7,6 +7,7 @@ const BASE_URL = process.env.BASE_URL || 'http://54.252.251.138:8080';
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: /.*\.spec\.(js|ts)/,
   // A smoke suite should be quick. A slow LLM reply on a live key still fits.
   timeout: 30_000,
   expect: { timeout: 10_000 },
