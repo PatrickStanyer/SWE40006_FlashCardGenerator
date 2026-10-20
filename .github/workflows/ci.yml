@@ -1,10 +1,13 @@
 name: CI
 
-# PR gate: every pull request to main must pass ALL jobs below before merge.
+# PR gate: every pull request must pass ALL jobs below before merge.
 # (Enforce via Settings > Branches > Branch protection > "Require status checks".)
+#
+# No branch filter. Restricting this to pull requests targeting main meant a
+# pull request aimed at any other branch reported no checks at all, so work
+# stacked on a branch went through unverified.
 on:
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
