@@ -18,6 +18,15 @@ AI_MOCK_MODE = os.getenv("AI_MOCK_MODE", "true").lower() in _TRUTHY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Any provider exposing an OpenAI-compatible chat completions endpoint can be
+# used without a second SDK or a second code path. Gemini publishes one, which
+# is how this runs on Google's free tier. Empty means talk to OpenAI itself.
+#
+#   OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+#   OPENAI_MODEL=<a model name from Google's documentation>
+#   OPENAI_API_KEY=<a Google AI Studio key>
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
+
 # A missing key degrades the feature to deterministic mock output instead of
 # crashing the container, which keeps Staging usable without a paid secret.
 USE_REAL_LLM = not AI_MOCK_MODE and bool(OPENAI_API_KEY)

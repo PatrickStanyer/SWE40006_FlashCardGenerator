@@ -6,9 +6,12 @@ calls OpenAI and is only reachable when a key is configured.
 """
 import hashlib
 import json
+import logging
 
 from app import config
 from app.models import Card
+
+logger = logging.getLogger(__name__)
 
 # Question and answer angles the mock generator cycles through. Keeping several
 # of them means a short deck never repeats itself.
@@ -115,18 +118,34 @@ def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no c
     """
     from openai import OpenAI
 
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    # Only the key is required. A base URL points the same client at any
+    # provider exposing an OpenAI-compatible endpoint, which is how this talks
+    # to Gemini without a second SDK or a second code path here.
+    client_options: dict[str, object] = {"api_key": config.OPENAI_API_KEY}
+    if config.OPENAI_BASE_URL:
+        client_options["base_url"] = config.OPENAI_BASE_URL
+
     instruction = (
         f"Write {count} study flashcards about {topic}. Return JSON of the form "
         '{"cards": [{"front": "...", "back": "..."}]} and nothing else.'
     )
-    completion = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
-        messages=[{"role": "user", "content": instruction}],
-        response_format={"type": "json_object"},
-    )
-    payload = json.loads(completion.choices[0].message.content or "{}")
-    raw = payload.get("cards", [])
+
+    # A rate limit, an unreachable provider, a changed model name or a reply
+    # that is not valid JSON all end up here. None of them should reach the
+    # person who just asked for a deck, so every one degrades to mock output.
+    try:
+        client = OpenAI(**client_options)
+        completion = client.chat.completions.create(
+            model=config.OPENAI_MODEL,
+            messages=[{"role": "user", "content": instruction}],
+            response_format={"type": "json_object"},
+            timeout=20,
+        )
+        payload = json.loads(completion.choices[0].message.content or "{}")
+        raw = payload.get("cards", [])
+    except Exception:
+        logger.exception("Live generation failed, falling back to deterministic output")
+        return generate_mock_cards(topic, count)
     cards = [
         Card(id=index, front=str(item.get("front", "")), back=str(item.get("back", "")))
         for index, item in enumerate(raw[:count])

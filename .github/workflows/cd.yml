@@ -69,11 +69,15 @@ jobs:
           FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
           BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Not secrets. Setting these points the same client at any
+          # OpenAI-compatible provider; empty means OpenAI itself.
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY
+          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY,OPENAI_BASE_URL,OPENAI_MODEL
           script: |
             set -eu
 
@@ -107,7 +111,9 @@ jobs:
               --restart unless-stopped \
               -e APP_VERSION="$TAG" \
               -e AI_MOCK_MODE=false \
-              -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+              -e OPENAI_BASE_URL="${OPENAI_BASE_URL:-}" \
+              -e OPENAI_MODEL="${OPENAI_MODEL:-}" \
               "$BACKEND_IMAGE:$TAG"
 
             # Only the web tier is published. The backend is reachable through
@@ -166,11 +172,15 @@ jobs:
           FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
           BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Not secrets. Setting these points the same client at any
+          # OpenAI-compatible provider; empty means OpenAI itself.
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY
+          envs: TAG,FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY,OPENAI_BASE_URL,OPENAI_MODEL
           script: |
             set -eu
 
@@ -195,7 +205,9 @@ jobs:
               --restart unless-stopped \
               -e APP_VERSION="$TAG" \
               -e AI_MOCK_MODE=false \
-              -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+              -e OPENAI_BASE_URL="${OPENAI_BASE_URL:-}" \
+              -e OPENAI_MODEL="${OPENAI_MODEL:-}" \
               "$BACKEND_IMAGE:$TAG"
 
             docker run -d \
