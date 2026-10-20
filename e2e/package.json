@@ -1,0 +1,14 @@
+{
+  "name": "flashcard-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright smoke tests run against a deployed environment (Staging by default).",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
