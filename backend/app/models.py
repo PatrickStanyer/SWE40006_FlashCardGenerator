@@ -4,6 +4,8 @@ These models are the single source of truth for validation and for the
 generated OpenAPI document, so the frontend and the test suite agree on one
 shape without a separate schema file.
 """
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -29,13 +31,28 @@ class Card(BaseModel):
 
     id: int = Field(..., description="Position of the card within the deck, starting at zero.")
     front: str = Field(..., description="The prompt shown first.")
-    back: str = Field(..., description="The answer revealed on flip.")
+    back: str = Field(
+        ...,
+        description=(
+            "The reverse of the card, revealed on flip. An answer when a model "
+            "wrote it, a study prompt when the deterministic generator did."
+        ),
+    )
 
 
 class CardsResponse(BaseModel):
     """Envelope returned by both card endpoints."""
 
     cards: list[Card]
+    source: Literal["model", "deterministic"] | None = Field(
+        None,
+        description=(
+            "Which path produced this deck. 'model' means the provider answered and "
+            "the reply parsed, 'deterministic' means the offline generator produced "
+            "it, and null means no deck has been generated yet. Without this a "
+            "caller cannot tell a live reply from a silent fallback."
+        ),
+    )
 
 
 class HealthResponse(BaseModel):
