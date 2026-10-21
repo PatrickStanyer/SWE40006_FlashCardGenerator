@@ -477,27 +477,28 @@ input[aria-invalid='true'] {
 .card {
     display: flex;
     width: 100%;
-    min-height: 188px;
+    min-height: 220px;
     flex-direction: column;
     justify-content: space-between;
-    padding: 18px 20px;
+    gap: 24px;
+    padding: 24px;
     border: 1px solid #e1e2d9;
-    border-top: 3px solid var(--coral);
-    border-radius: 3px;
-    background: repeating-linear-gradient(transparent 0 1.9rem, #e5e9de 1.9rem 2rem), var(--paper);
+    border-top: 4px solid var(--coral);
+    border-radius: 6px;
+    background: #fff;
     color: var(--ink);
     text-align: left;
-    box-shadow: 0 5px 16px rgb(28 36 52 / .08);
+    box-shadow: 0 6px 18px rgb(28 36 52 / .1);
 }
 
 .card-side {
-    color: var(--muted);
-    font-size: .78rem;
-    font-weight: 650;
+    color: var(--green-dark);
+    font-size: 1.05rem;
+    font-weight: 700;
 }
 
 .card-text {
-    font: 1.3rem/1.7rem var(--serif);
+    font: 1.55rem/1.5 var(--serif);
     animation: flip .25s ease-out;
 }
 
@@ -682,6 +683,7 @@ input[aria-invalid='true'] {
     color: white;
     font-size: .86rem;
     font-weight: 650;
+    text-decoration: none;
 }
 
 .dashboard-create-button:hover {
@@ -691,6 +693,39 @@ input[aria-invalid='true'] {
 .dashboard-create-button span {
     color: var(--lime);
     font-size: 1.1rem;
+}
+
+.dashboard-create-menu {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.dashboard-create-menu-items {
+    position: absolute;
+    z-index: 2;
+    top: calc(100% + 7px);
+    right: 0;
+    display: grid;
+    min-width: 190px;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--paper);
+    box-shadow: 0 8px 20px rgb(35 48 38 / .12);
+}
+
+.dashboard-create-menu-items a {
+    padding: 10px 12px;
+    border-radius: 3px;
+    color: var(--ink);
+    font-size: .84rem;
+    text-decoration: none;
+}
+
+.dashboard-create-menu-items a:hover,
+.dashboard-create-menu-items a:focus-visible {
+    background: #e9eddf;
+    color: var(--green-dark);
 }
 
 .dashboard-generator {
@@ -720,18 +755,96 @@ input[aria-invalid='true'] {
 }
 
 .generator-dismiss {
+    display: grid;
     width: 30px;
     height: 30px;
+    place-items: center;
     border: 0;
     border-radius: 50%;
     background: #eff0e9;
     color: var(--ink);
     font-size: 1.35rem;
     line-height: 1;
+    text-decoration: none;
 }
 
 .dashboard-generator .generator {
     margin-bottom: 18px;
+}
+
+.manual-deck-form {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.manual-deck-form > label,
+.manual-card-fields label {
+    color: #39443b;
+    font-size: .83rem;
+    font-weight: 650;
+}
+
+.manual-deck-form textarea {
+    width: 100%;
+    min-height: 74px;
+    padding: 9px 12px;
+    border: 1px solid #d5d9d0;
+    border-radius: 4px;
+    background: white;
+    color: var(--ink);
+    resize: vertical;
+}
+
+.manual-deck-form textarea:focus {
+    border-color: var(--green);
+    outline: 2px solid rgb(49 91 67 / .14);
+}
+
+.manual-card-fields {
+    display: grid;
+    gap: 8px;
+    margin: 8px 0 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.manual-card-fields legend {
+    padding: 0 5px;
+    color: var(--green-dark);
+    font: 400 1.05rem/1.2 var(--serif);
+}
+
+.manual-card-add,
+.manual-card-remove {
+    justify-self: start;
+    padding: 5px 0;
+    border: 0;
+    background: transparent;
+    color: var(--green-dark);
+    font-size: .82rem;
+    font-weight: 650;
+}
+
+.manual-card-remove {
+    color: #8b3526;
+}
+
+.manual-deck-save {
+    min-height: 44px;
+    margin-top: 4px;
+    padding: 0 17px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--green);
+    color: white;
+    font-weight: 650;
+}
+
+.manual-deck-save:disabled {
+    opacity: .55;
+    cursor: not-allowed;
 }
 
 .dashboard-error {
@@ -787,6 +900,7 @@ input[aria-invalid='true'] {
     color: var(--green);
     font-size: .82rem;
     font-weight: 700;
+    text-decoration: none;
 }
 
 .library-create-link span {
@@ -961,12 +1075,13 @@ input[aria-invalid='true'] {
 }
 
 .deck-study-panel .card {
-    min-height: 175px;
-    padding: 15px;
+    min-height: 205px;
+    padding: 20px;
 }
 
 .deck-study-panel .card-text {
-    font-size: 1.12rem;
+    font-size: 1.35rem;
+    line-height: 1.5;
 }
 
 .deck-study-panel .deck-controls {
