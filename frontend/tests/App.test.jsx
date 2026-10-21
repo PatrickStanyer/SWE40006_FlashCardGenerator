@@ -52,6 +52,25 @@ describe('App', () => {
     await submitTopic();
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach the server/i);
   });
+
+  it('limits the requested card count to the supported range', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(ok({ cards: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    await user.type(screen.getByLabelText('Topic'), 'Docker');
+    const countInput = screen.getByLabelText('Number of cards');
+    await user.clear(countInput);
+    await user.type(countInput, '25');
+    await user.click(screen.getByRole('button', { name: /generate cards/i }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).count).toBe(20);
+
+    await user.clear(countInput);
+    await user.type(countInput, '-5');
+    await user.click(screen.getByRole('button', { name: /generate cards/i }));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).count).toBe(1);
+  });
 });
 
 describe('normalizeCards', () => {
