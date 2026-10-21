@@ -41,8 +41,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push frontend image
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: |
-          docker build -t "$FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}" ./frontend
+          test -n "$VITE_SUPABASE_URL" \
+            || { echo "Repository variable VITE_SUPABASE_URL is required to build the frontend."; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" \
+            || { echo "Repository variable VITE_SUPABASE_ANON_KEY is required to build the frontend."; exit 1; }
+          docker build \
+            --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            -t "$FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}" \
+            ./frontend
           docker push "$FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}"
 
       - name: Build and push backend image

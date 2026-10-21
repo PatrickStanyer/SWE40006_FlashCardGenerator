@@ -150,4 +150,31 @@ describe('App authentication', () => {
     unmount();
     expect(mocks.unsubscribe).toHaveBeenCalled();
   });
+
+  it('does not establish a session when getSession reports an error', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session }, error: new Error('Session unavailable') });
+    render(<App />);
+
+    expect(screen.queryByText('Dashboard for study@example.com')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /make the hard stuff/i })).toBeInTheDocument();
+  });
+
+  it('dismisses the account dialog when its backdrop is clicked', async () => {
+    const user = userEvent.setup();
+    await openDialog(user, 'Sign in');
+
+    await user.click(screen.getByRole('dialog').parentElement);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('uses a fallback message when authentication fails without an error message', async () => {
+    mocks.signInWithPassword.mockResolvedValue({ error: {} });
+    const user = userEvent.setup();
+    await openDialog(user, 'Sign in');
+    await fillCredentials(user);
+    await user.click(dialogButton('Sign in'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Authentication failed. Please try again.');
+  });
 });

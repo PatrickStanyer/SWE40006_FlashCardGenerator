@@ -65,6 +65,24 @@ Open [http://localhost:5173](http://localhost:5173). The Vite dev server automat
 
 ---
 
+### Services & Configuration
+
+- **Card generation:** Vite proxies `/api` and `/healthz` to `http://localhost:8000`.
+- **Sign-in and saved decks:** Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the root `.env`. To enable saved decks, run [`frontend/supabase-schema.sql`](frontend/supabase-schema.sql) against your Supabase project. The frontend can start without Supabase credentials, but account features will be unavailable.
+
+`VITE_API_URL` defaults to `/api`; keep that value for the local Vite proxy unless you intentionally use a different API URL.
+
+### Deploying & CI/CD Variables
+
+The CD workflow builds one frontend image for both staging and production, so configure the shared Supabase project in the repository's **Settings → Secrets and variables → Actions → Variables**:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+These values are embedded into the static frontend at image-build time. The anon/publishable key is intended for browser use; never use a Supabase service-role key here. The workflow fails the frontend image build if either variable is missing.
+
+---
+
 ## 🛡️ Automated Quality Gates & Testing
 
 Every Pull Request must pass the mandatory status checks enforced by GitHub Actions and Branch Protection:
