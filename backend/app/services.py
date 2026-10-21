@@ -7,11 +7,30 @@ calls OpenAI and is only reachable when a key is configured.
 import hashlib
 import json
 import logging
+from typing import Literal, NamedTuple
 
 from app import config
 from app.models import Card
 
 logger = logging.getLogger(__name__)
+
+# Which path produced a deck. "model" means the provider answered and the
+# reply parsed; "deterministic" means the offline generator produced it,
+# either because no key is configured or because the live call failed.
+Source = Literal["model", "deterministic"]
+
+
+class Deck(NamedTuple):
+    """A deck together with the path that produced it.
+
+    The source travels with the cards because nothing else distinguishes
+    them. A failed live call falls back to deterministic output of exactly
+    the same shape, so a broken credential looks identical to one that was
+    never configured unless the service says which path it took.
+    """
+
+    cards: list[Card]
+    source: Source | None
 
 # Question and answer angles the mock generator cycles through. Keeping several
 # of them means a short deck never repeats itself.
@@ -74,9 +93,10 @@ _DEPTH_SUFFIXES: list[str] = [
     " Name the failure mode.",
 ]
 
-# The most recent deck produced by /api/generate. A module-level list keeps the
-# service stateless across restarts, which is what the deployment assumes.
-_LAST_DECK: list[Card] = []
+# The most recent deck produced by /api/generate. Held in memory only, so the
+# service stays stateless across restarts, which is what the deployment
+# assumes. A source of None means nothing has been generated yet.
+_LAST_DECK: Deck = Deck([], None)
 
 
 def _starting_angle(topic: str) -> int:
@@ -125,7 +145,7 @@ def _json_from_reply(content: str) -> dict:
         text = chr(10).join(lines)
     return json.loads(text or "{}")
 
-def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no cover
+def _generate_with_openai(topic: str, count: int) -> Deck:  # pragma: no cover
     """Build a deck from the configured model.
 
     Imported lazily so the package is only touched when a key is present, and
@@ -163,7 +183,7 @@ def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no c
         raw = payload.get("cards", [])
     except Exception:
         logger.exception("Live generation failed, falling back to deterministic output")
-        return generate_mock_cards(topic, count)
+        return Deck(generate_mock_cards(topic, count), "deterministic")
     cards = [
         Card(id=index, front=str(item.get("front", "")), back=str(item.get("back", "")))
         for index, item in enumerate(raw[:count])
@@ -171,23 +191,23 @@ def _generate_with_openai(topic: str, count: int) -> list[Card]:  # pragma: no c
     # A short or malformed reply falls back to mock output rather than failing
     # the request, so the user still gets a usable deck.
     if len(cards) < count:
-        return generate_mock_cards(topic, count)
-    return cards
+        return Deck(generate_mock_cards(topic, count), "deterministic")
+    return Deck(cards, "model")
 
 
-def generate_cards(topic: str, count: int) -> list[Card]:
-    """Return count cards for topic, using whichever generation path is configured."""
+def generate_cards(topic: str, count: int) -> Deck:
+    """Return a deck for topic, using whichever generation path is configured."""
     if config.USE_REAL_LLM:  # pragma: no cover - needs a live API key
         return _generate_with_openai(topic, count)
-    return generate_mock_cards(topic, count)
+    return Deck(generate_mock_cards(topic, count), "deterministic")
 
 
-def remember_deck(cards: list[Card]) -> None:
+def remember_deck(deck: Deck) -> None:
     """Store the deck just generated so /api/cards can hand it back."""
-    _LAST_DECK.clear()
-    _LAST_DECK.extend(cards)
+    global _LAST_DECK
+    _LAST_DECK = Deck(list(deck.cards), deck.source)
 
 
-def latest_cards() -> list[Card]:
+def latest_deck() -> Deck:
     """Return a copy of the most recent deck, empty before the first generation."""
-    return list(_LAST_DECK)
+    return Deck(list(_LAST_DECK.cards), _LAST_DECK.source)

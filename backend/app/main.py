@@ -33,12 +33,13 @@ async def generate(payload: GenerateRequest) -> CardsResponse:
     Validation failures are turned into 422 responses by FastAPI before this
     function runs, which is what the frontend relies on to show a field error.
     """
-    cards = services.generate_cards(payload.topic, payload.count)
-    services.remember_deck(cards)
-    return CardsResponse(cards=cards)
+    deck = services.generate_cards(payload.topic, payload.count)
+    services.remember_deck(deck)
+    return CardsResponse(cards=deck.cards, source=deck.source)
 
 
 @app.get("/api/cards", response_model=CardsResponse, tags=["cards"])
 async def list_cards() -> CardsResponse:
     """Return the most recently generated deck, or an empty deck on a cold start."""
-    return CardsResponse(cards=services.latest_cards())
+    deck = services.latest_deck()
+    return CardsResponse(cards=deck.cards, source=deck.source)

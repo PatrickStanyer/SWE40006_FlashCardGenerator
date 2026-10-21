@@ -87,28 +87,34 @@ def test_different_topics_do_not_all_start_on_the_same_angle():
 
 @pytest.fixture
 def empty_store():
-    services.remember_deck([])
+    services.remember_deck(services.Deck([], None))
     yield
-    services.remember_deck([])
+    services.remember_deck(services.Deck([], None))
 
 
-def test_latest_cards_is_empty_before_any_generation(empty_store):
-    assert services.latest_cards() == []
+def test_latest_deck_is_empty_before_any_generation(empty_store):
+    deck = services.latest_deck()
+    assert deck.cards == []
+    assert deck.source is None
 
 
 def test_remember_deck_replaces_the_previous_deck(empty_store):
-    services.remember_deck(services.generate_mock_cards("First", 3))
-    services.remember_deck(services.generate_mock_cards("Second", 2))
+    first = services.Deck(services.generate_mock_cards("First", 3), "deterministic")
+    second = services.Deck(services.generate_mock_cards("Second", 2), "model")
+    services.remember_deck(first)
+    services.remember_deck(second)
 
-    latest = services.latest_cards()
-    assert len(latest) == 2
-    assert all("Second" in card.front for card in latest)
+    latest = services.latest_deck()
+    assert len(latest.cards) == 2
+    assert all("Second" in card.front for card in latest.cards)
+    assert latest.source == "model"
 
 
-def test_latest_cards_returns_a_copy(empty_store):
-    services.remember_deck(services.generate_mock_cards("Docker", 2))
-    services.latest_cards().clear()
-    assert len(services.latest_cards()) == 2
+def test_latest_deck_returns_a_copy(empty_store):
+    cards = services.generate_mock_cards("Docker", 2)
+    services.remember_deck(services.Deck(cards, "deterministic"))
+    services.latest_deck().cards.clear()
+    assert len(services.latest_deck().cards) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +124,9 @@ def test_latest_cards_returns_a_copy(empty_store):
 
 def test_generate_cards_uses_mock_when_real_llm_is_off(monkeypatch):
     monkeypatch.setattr(config, "USE_REAL_LLM", False)
-    assert services.generate_cards("Docker", 3) == services.generate_mock_cards("Docker", 3)
+    deck = services.generate_cards("Docker", 3)
+    assert deck.cards == services.generate_mock_cards("Docker", 3)
+    assert deck.source == "deterministic"
 
 
 def _install_fake_openai(monkeypatch, reply: dict):
@@ -147,9 +155,10 @@ def test_real_llm_reply_is_parsed_into_cards(monkeypatch):
     monkeypatch.setattr(config, "USE_REAL_LLM", True)
     monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-test")
 
-    cards = services.generate_cards("Docker", 2)
+    deck = services.generate_cards("Docker", 2)
 
-    assert cards == [Card(id=0, front="Q1", back="A1"), Card(id=1, front="Q2", back="A2")]
+    assert deck.cards == [Card(id=0, front="Q1", back="A1"), Card(id=1, front="Q2", back="A2")]
+    assert deck.source == "model"
     assert calls["api_key"] == "sk-test"
     assert calls["model"] == config.OPENAI_MODEL
     assert "Docker" in calls["messages"][0]["content"]
@@ -160,21 +169,27 @@ def test_real_llm_extra_cards_are_trimmed_to_count(monkeypatch):
     _install_fake_openai(monkeypatch, reply)
     monkeypatch.setattr(config, "USE_REAL_LLM", True)
 
-    assert len(services.generate_cards("Docker", 3)) == 3
+    deck = services.generate_cards("Docker", 3)
+    assert len(deck.cards) == 3
+    assert deck.source == "model"
 
 
 def test_real_llm_short_reply_falls_back_to_mock(monkeypatch):
     _install_fake_openai(monkeypatch, {"cards": [{"front": "Only one", "back": "A"}]})
     monkeypatch.setattr(config, "USE_REAL_LLM", True)
 
-    assert services.generate_cards("Docker", 4) == services.generate_mock_cards("Docker", 4)
+    deck = services.generate_cards("Docker", 4)
+    assert deck.cards == services.generate_mock_cards("Docker", 4)
+    assert deck.source == "deterministic"
 
 
 def test_real_llm_malformed_reply_falls_back_to_mock(monkeypatch):
     _install_fake_openai(monkeypatch, {"unexpected": "shape"})
     monkeypatch.setattr(config, "USE_REAL_LLM", True)
 
-    assert services.generate_cards("Docker", 2) == services.generate_mock_cards("Docker", 2)
+    deck = services.generate_cards("Docker", 2)
+    assert deck.cards == services.generate_mock_cards("Docker", 2)
+    assert deck.source == "deterministic"
 
 
 # ---------------------------------------------------------------------------
