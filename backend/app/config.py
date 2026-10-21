@@ -27,6 +27,19 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 #   OPENAI_API_KEY=<a Google AI Studio key>
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
 
+# How long one request may take, and how many times to retry it.
+#
+# Measured against Gemini's free tier for a four card deck: a flash-lite
+# model answered in 1.6s, the full flash model in 6s, and the newest and
+# largest flash model took 59s. Newer is not faster, so the model name is
+# configuration rather than a constant, and the ceiling has to allow for a
+# busy free tier without making someone wait through a stall.
+#
+# One retry rather than the client default of two keeps the worst case at
+# twice the ceiling instead of three times it.
+OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT", "25"))
+OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "1"))
+
 # A missing key degrades the feature to deterministic mock output instead of
 # crashing the container, which keeps Staging usable without a paid secret.
 USE_REAL_LLM = not AI_MOCK_MODE and bool(OPENAI_API_KEY)
