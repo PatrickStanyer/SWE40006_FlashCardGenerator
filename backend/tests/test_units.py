@@ -132,8 +132,9 @@ def _install_fake_openai(monkeypatch, reply: dict):
             return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
 
     class FakeOpenAI:
-        def __init__(self, api_key):
+        def __init__(self, api_key=None, **kwargs):
             calls["api_key"] = api_key
+            calls.update(kwargs)
             self.chat = types.SimpleNamespace(completions=_Completions())
 
     monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
@@ -186,7 +187,15 @@ def reload_config(monkeypatch):
     """Reload app.config under a temporary environment, then restore it."""
 
     def _reload(**env):
-        for key in ("AI_MOCK_MODE", "OPENAI_API_KEY", "OPENAI_MODEL", "APP_VERSION"):
+        for key in (
+            "AI_MOCK_MODE",
+            "OPENAI_API_KEY",
+            "OPENAI_MODEL",
+            "OPENAI_BASE_URL",
+            "OPENAI_TIMEOUT",
+            "OPENAI_MAX_RETRIES",
+            "APP_VERSION",
+        ):
             monkeypatch.delenv(key, raising=False)
         for key, value in env.items():
             monkeypatch.setenv(key, value)
