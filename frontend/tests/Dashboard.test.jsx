@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Dashboard from '../src/components/Dashboard.jsx';
@@ -26,6 +26,7 @@ function renderDashboard({ onSignOut = vi.fn(), signOutLoading = false } = {}) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, '', `${window.location.pathname}#decks`);
     mocks.from.mockReturnValue({
         select: vi.fn(() => ({
             eq: vi.fn(() => ({
@@ -42,9 +43,35 @@ beforeEach(() => {
 });
 
 describe('Dashboard', () => {
+    it('navigates sidebar destinations and creates from the new deck menu', async () => {
+        const user = userEvent.setup();
+        renderDashboard();
+        const navigation = within(screen.getByRole('navigation', { name: 'Dashboard navigation' }));
+
+        expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument();
+        expect(window.location.hash).toBe('#decks');
+        await user.click(screen.getByRole('button', { name: /new deck/i }));
+        expect(screen.getByRole('menu', { name: 'Create a deck' })).toBeInTheDocument();
+        await user.click(screen.getByRole('menuitem', { name: 'Create manually' }));
+        expect(await screen.findByRole('heading', { level: 1, name: 'Create a deck manually' })).toBeInTheDocument();
+        expect(window.location.hash).toBe('#create-manual');
+
+        await user.click(navigation.getByRole('link', { name: 'My decks' }));
+        await user.click(screen.getByRole('button', { name: /new deck/i }));
+        await user.click(screen.getByRole('menuitem', { name: 'Auto-generate' }));
+        expect(await screen.findByRole('heading', { level: 1, name: 'Auto-generate a deck' })).toBeInTheDocument();
+        expect(window.location.hash).toBe('#generate');
+
+        await user.click(navigation.getByRole('link', { name: 'My decks' }));
+        expect(await screen.findByRole('heading', { level: 1, name: 'My decks' })).toBeInTheDocument();
+        expect(window.location.hash).toBe('#decks');
+    });
+
     it('loads and displays decks belonging to the signed-in user', async () => {
+        const user = userEvent.setup();
         renderDashboard();
 
+        await user.click(within(screen.getByRole('navigation', { name: 'Dashboard navigation' })).getByRole('link', { name: /my decks/i }));
         expect(await screen.findByRole('heading', { level: 3, name: 'Docker basics' })).toBeInTheDocument();
         expect(mocks.from).toHaveBeenCalledWith('decks');
     });
@@ -61,10 +88,11 @@ describe('Dashboard', () => {
 
         renderDashboard();
 
+        await user.click(within(screen.getByRole('navigation', { name: 'Dashboard navigation' })).getByRole('link', { name: /my decks/i }));
         expect(await screen.findByRole('heading', { name: 'Your first deck is waiting.' })).toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Create your first deck' }));
+        await user.click(screen.getByRole('link', { name: 'Auto-generate your first deck' }));
         expect(screen.getByRole('heading', { name: 'What are you learning?' })).toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Close create deck form' }));
+        await user.click(screen.getByRole('link', { name: 'Close create deck form' }));
         expect(screen.queryByRole('heading', { name: 'What are you learning?' })).not.toBeInTheDocument();
     });
 
@@ -119,6 +147,7 @@ describe('Dashboard', () => {
 
         renderDashboard();
 
+        await user.click(within(screen.getByRole('navigation', { name: 'Dashboard navigation' })).getByRole('link', { name: /my decks/i }));
         const secondDeckButton = await screen.findByRole('button', { name: /French basics/ });
         await user.click(secondDeckButton);
 
@@ -150,7 +179,7 @@ describe('Dashboard', () => {
         });
 
         renderDashboard();
-        await user.click(screen.getByRole('button', { name: /create a deck/i }));
+        await user.click(screen.getByRole('link', { name: /auto-generate deck/i }));
         await user.type(screen.getByLabelText('Topic'), 'French');
         await user.click(screen.getByRole('button', { name: /generate cards/i }));
 
@@ -164,7 +193,7 @@ describe('Dashboard', () => {
         mocks.generateCards.mockRejectedValue(new Error('API unavailable'));
 
         renderDashboard();
-        await user.click(screen.getByRole('button', { name: /create a deck/i }));
+        await user.click(screen.getByRole('link', { name: /auto-generate deck/i }));
         await user.type(screen.getByLabelText('Topic'), 'French');
         await user.click(screen.getByRole('button', { name: /generate cards/i }));
 
@@ -185,13 +214,49 @@ describe('Dashboard', () => {
         });
 
         renderDashboard();
-        await user.click(screen.getByRole('button', { name: /create a deck/i }));
+        await user.click(screen.getByRole('link', { name: /auto-generate deck/i }));
         await user.type(screen.getByLabelText('Topic'), 'French');
         await user.click(screen.getByRole('button', { name: /generate cards/i }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(
-            'Cards were generated but could not be saved: database unavailable. Check frontend/supabase-schema.sql.',
+            'Could not save this deck: database unavailable. Check frontend/supabase-schema.sql.',
         );
         expect(screen.getByRole('heading', { name: 'What are you learning?' })).toBeInTheDocument();
+    });
+
+    it('manually creates and saves a deck with multiple cards', async () => {
+        const user = userEvent.setup();
+        const cards = [
+            { id: 0, front: 'What is Docker?', back: 'A container platform.' },
+            { id: 1, front: 'What is an image?', back: 'A template for a container.' },
+        ];
+        mocks.insert.mockReturnValue({
+            select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                    data: { ...savedDeck, id: 'deck-2', title: 'Docker basics', cards },
+                    error: null,
+                }),
+            })),
+        });
+
+        renderDashboard();
+        await user.click(screen.getByRole('link', { name: /create manually/i }));
+        await user.type(screen.getByLabelText('Deck title'), 'Docker basics');
+        await user.type(screen.getByLabelText('Question 1'), cards[0].front);
+        await user.type(screen.getByLabelText('Answer 1'), cards[0].back);
+        await user.click(screen.getByRole('button', { name: /add another card/i }));
+        await user.type(screen.getByLabelText('Question 2'), cards[1].front);
+        await user.type(screen.getByLabelText('Answer 2'), cards[1].back);
+        await user.click(screen.getByRole('button', { name: 'Save deck' }));
+
+        await screen.findByRole('heading', { level: 3, name: 'Docker basics' });
+        await user.click(screen.getByRole('button', { name: 'Next' }));
+        expect(await screen.findByText('What is an image?')).toBeInTheDocument();
+        expect(mocks.generateCards).not.toHaveBeenCalled();
+        expect(mocks.insert).toHaveBeenCalledWith({
+            user_id: session.user.id,
+            title: 'Docker basics',
+            cards,
+        });
     });
 });
