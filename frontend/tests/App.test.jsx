@@ -18,17 +18,33 @@ afterEach(() => vi.unstubAllGlobals());
 describe('App', () => {
   it('posts topic and count to /api/generate and shows the first card', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      ok({ cards: [{ question: 'What is Docker?', answer: 'A container platform.' }] }),
+      ok({
+        cards: [{ question: 'What is Docker?', answer: 'A container platform.' }],
+        source: 'model',
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     await submitTopic('Docker');
 
     expect(await screen.findByText('What is Docker?')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByTestId('flashcard'));
+    expect(screen.getByText('Answer')).toBeInTheDocument();
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/generate');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ topic: 'Docker', count: 5 });
+  });
+
+  it('labels deterministic fallback content as a study prompt', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      ok({ cards: [{ front: 'What is Docker?', back: 'Explain Docker.' }], source: 'deterministic' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await submitTopic('Docker');
+
+    await userEvent.setup().click(screen.getByTestId('flashcard'));
+    expect(screen.getByText('How to answer')).toBeInTheDocument();
   });
 
   it('blocks empty topics without calling the API', async () => {

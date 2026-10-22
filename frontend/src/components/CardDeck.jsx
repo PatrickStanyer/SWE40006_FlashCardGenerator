@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function CardDeck({ cards = [], error = null, loading = false }) {
+export default function CardDeck({ cards = [], source = null, error = null, loading = false }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
 
@@ -29,7 +29,9 @@ export default function CardDeck({ cards = [], error = null, loading = false }) 
         aria-pressed={flipped}
         onClick={() => setFlipped((f) => !f)}
       >
-        <span className="card-side">{flipped ? 'Answer' : 'Question'}</span>
+        <span className="card-side">
+          {flipped ? (source === 'deterministic' ? 'How to answer' : 'Answer') : 'Question'}
+        </span>
         <span className="card-text" key={`${index}-${flipped}`}>
           {flipped ? card.back : card.front}
         </span>
