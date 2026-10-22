@@ -24,6 +24,14 @@ describe('CardDeck', () => {
     expect(screen.getByText(cards[0].front)).toBeInTheDocument();
   });
 
+  it('uses the deterministic label for fallback cards', async () => {
+    const user = userEvent.setup();
+    render(<CardDeck cards={cards} source="deterministic" />);
+
+    await user.click(screen.getByTestId('flashcard'));
+    expect(screen.getByText('How to answer')).toBeInTheDocument();
+  });
+
   it('navigates with Previous/Next and resets to the question side', async () => {
     const user = userEvent.setup();
     render(<CardDeck cards={cards} />);

@@ -29,5 +29,9 @@ export async function generateCards(topic, count) {
   if (!res.ok) {
     throw new Error(`Card generation failed (HTTP ${res.status}). Try again in a moment.`);
   }
-  return normalizeCards(await res.json());
+  const payload = await res.json();
+  return {
+    cards: normalizeCards(payload),
+    source: payload?.source,
+  };
 }

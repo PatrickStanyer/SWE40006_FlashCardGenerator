@@ -7,6 +7,7 @@ import { supabase } from './supabase.js';
 
 export default function App() {
   const [cards, setCards] = useState([]);
+  const [source, setSource] = useState(null);
   const [deckId, setDeckId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -32,10 +33,13 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      setCards(await generateCards(topic, count));
+      const result = await generateCards(topic, count);
+      setCards(result.cards);
+      setSource(result.source);
       setDeckId((id) => id + 1); // remount the deck so it starts at card 1
     } catch (err) {
       setCards([]);
+      setSource(null);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -158,7 +162,7 @@ export default function App() {
           </div>
           <div className="generator-panel">
             <GeneratorForm onGenerate={handleGenerate} loading={loading} />
-            <CardDeck key={deckId} cards={cards} error={error} loading={loading} />
+            <CardDeck key={deckId} cards={cards} source={source} error={error} loading={loading} />
           </div>
         </div>
       </section>

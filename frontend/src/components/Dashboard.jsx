@@ -90,7 +90,7 @@ export default function Dashboard({ session, onSignOut, signOutLoading }) {
         return () => { active = false; };
     }, [session.user.id]);
 
-    async function saveDeck(title, cards) {
+    async function saveDeck(title, cards, source = null) {
         const { data, error: saveError } = await supabase
             .from('decks')
             .insert({ user_id: session.user.id, title, cards })
@@ -101,7 +101,7 @@ export default function Dashboard({ session, onSignOut, signOutLoading }) {
             throw new Error(`Could not save this deck: ${saveError.message}. Check frontend/supabase-schema.sql.`);
         }
 
-        setDecks((currentDecks) => [data, ...currentDecks]);
+        setDecks((currentDecks) => [{ ...data, source }, ...currentDecks]);
         setSelectedDeckId(data.id);
         setManualTitle('');
         setManualCards([{ id: 0, front: '', back: '' }]);
@@ -113,8 +113,8 @@ export default function Dashboard({ session, onSignOut, signOutLoading }) {
         setCreatingDeck(true);
         setError('');
         try {
-            const cards = await generateCards(topic, count);
-            await saveDeck(topic, cards);
+            const { cards, source } = await generateCards(topic, count);
+            await saveDeck(topic, cards, source);
         } catch (createError) {
             setError(createError.message || 'Could not create this deck. Please try again.');
         } finally {
@@ -223,57 +223,57 @@ export default function Dashboard({ session, onSignOut, signOutLoading }) {
                             </div>
                             <a className="generator-dismiss" href="#decks" aria-label="Close create deck form" onClick={(event) => { event.preventDefault(); navigateTo('decks'); }}>×</a>
                         </div>
-                            <form className="manual-deck-form" onSubmit={handleManualDeckSubmit}>
-                                <label htmlFor="manual-deck-title">Deck title</label>
-                                <input
-                                    id="manual-deck-title"
-                                    value={manualTitle}
-                                    onChange={(event) => setManualTitle(event.target.value)}
-                                    placeholder="e.g. Biology revision"
-                                    required
-                                />
-                                {manualCards.map((card, index) => (
-                                    <fieldset className="manual-card-fields" key={card.id}>
-                                        <legend>Card {index + 1}</legend>
-                                        <label htmlFor={`manual-front-${card.id}`}>Question {index + 1}</label>
-                                        <textarea
-                                            id={`manual-front-${card.id}`}
-                                            value={card.front}
-                                            onChange={(event) => setManualCards((cards) => cards.map((item) => item.id === card.id ? { ...item, front: event.target.value } : item))}
-                                            required
-                                        />
-                                        <label htmlFor={`manual-back-${card.id}`}>Answer {index + 1}</label>
-                                        <textarea
-                                            id={`manual-back-${card.id}`}
-                                            value={card.back}
-                                            onChange={(event) => setManualCards((cards) => cards.map((item) => item.id === card.id ? { ...item, back: event.target.value } : item))}
-                                            required
-                                        />
-                                        {manualCards.length > 1 && (
-                                            <button
-                                                className="manual-card-remove"
-                                                type="button"
-                                                onClick={() => setManualCards((cards) => cards.filter((item) => item.id !== card.id))}
-                                            >
-                                                Remove card
-                                            </button>
-                                        )}
-                                    </fieldset>
-                                ))}
-                                <button
-                                    className="manual-card-add"
-                                    type="button"
-                                    onClick={() => {
-                                        setManualCards((cards) => [...cards, { id: nextManualCardId, front: '', back: '' }]);
-                                        setNextManualCardId((id) => id + 1);
-                                    }}
-                                >
-                                    + Add another card
-                                </button>
-                                <button className="manual-deck-save" type="submit" disabled={creatingDeck}>
-                                    {creatingDeck ? 'Saving…' : 'Save deck'}
-                                </button>
-                            </form>
+                        <form className="manual-deck-form" onSubmit={handleManualDeckSubmit}>
+                            <label htmlFor="manual-deck-title">Deck title</label>
+                            <input
+                                id="manual-deck-title"
+                                value={manualTitle}
+                                onChange={(event) => setManualTitle(event.target.value)}
+                                placeholder="e.g. Biology revision"
+                                required
+                            />
+                            {manualCards.map((card, index) => (
+                                <fieldset className="manual-card-fields" key={card.id}>
+                                    <legend>Card {index + 1}</legend>
+                                    <label htmlFor={`manual-front-${card.id}`}>Question {index + 1}</label>
+                                    <textarea
+                                        id={`manual-front-${card.id}`}
+                                        value={card.front}
+                                        onChange={(event) => setManualCards((cards) => cards.map((item) => item.id === card.id ? { ...item, front: event.target.value } : item))}
+                                        required
+                                    />
+                                    <label htmlFor={`manual-back-${card.id}`}>Answer {index + 1}</label>
+                                    <textarea
+                                        id={`manual-back-${card.id}`}
+                                        value={card.back}
+                                        onChange={(event) => setManualCards((cards) => cards.map((item) => item.id === card.id ? { ...item, back: event.target.value } : item))}
+                                        required
+                                    />
+                                    {manualCards.length > 1 && (
+                                        <button
+                                            className="manual-card-remove"
+                                            type="button"
+                                            onClick={() => setManualCards((cards) => cards.filter((item) => item.id !== card.id))}
+                                        >
+                                            Remove card
+                                        </button>
+                                    )}
+                                </fieldset>
+                            ))}
+                            <button
+                                className="manual-card-add"
+                                type="button"
+                                onClick={() => {
+                                    setManualCards((cards) => [...cards, { id: nextManualCardId, front: '', back: '' }]);
+                                    setNextManualCardId((id) => id + 1);
+                                }}
+                            >
+                                + Add another card
+                            </button>
+                            <button className="manual-deck-save" type="submit" disabled={creatingDeck}>
+                                {creatingDeck ? 'Saving…' : 'Save deck'}
+                            </button>
+                        </form>
                     </section>
                 )}
 
@@ -325,7 +325,7 @@ export default function Dashboard({ session, onSignOut, signOutLoading }) {
                                             </div>
                                             <span className="study-count">{selectedDeck.cards.length} cards</span>
                                         </div>
-                                        <CardDeck key={selectedDeck.id} cards={selectedDeck.cards} />
+                                        <CardDeck key={selectedDeck.id} cards={selectedDeck.cards} source={selectedDeck.source} />
                                     </>
                                 ) : <p className="dashboard-status">Select a deck to start studying.</p>}
                             </aside>
