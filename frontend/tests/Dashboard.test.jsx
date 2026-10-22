@@ -168,7 +168,7 @@ describe('Dashboard', () => {
     it('generates and saves a new deck for the signed-in user', async () => {
         const user = userEvent.setup();
         const cards = [{ id: 0, front: 'Bonjour means?', back: 'Hello.' }];
-        mocks.generateCards.mockResolvedValue(cards);
+        mocks.generateCards.mockResolvedValue({ cards, source: 'deterministic' });
         mocks.insert.mockReturnValue({
             select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({
@@ -184,6 +184,8 @@ describe('Dashboard', () => {
         await user.click(screen.getByRole('button', { name: /generate cards/i }));
 
         expect(await screen.findByText('Bonjour means?')).toBeInTheDocument();
+        await user.click(screen.getByTestId('flashcard'));
+        expect(screen.getByText('How to answer')).toBeInTheDocument();
         expect(mocks.generateCards).toHaveBeenCalledWith('French', 5);
         expect(mocks.insert).toHaveBeenCalledWith({ user_id: session.user.id, title: 'French', cards });
     });
@@ -203,7 +205,10 @@ describe('Dashboard', () => {
 
     it('shows an error when generated cards cannot be saved', async () => {
         const user = userEvent.setup();
-        mocks.generateCards.mockResolvedValue([{ id: 0, front: 'Bonjour means?', back: 'Hello.' }]);
+        mocks.generateCards.mockResolvedValue({
+            cards: [{ id: 0, front: 'Bonjour means?', back: 'Hello.' }],
+            source: 'model',
+        });
         mocks.insert.mockReturnValue({
             select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({
