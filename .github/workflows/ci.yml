@@ -26,6 +26,17 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+
+      # nginx only reads its configuration when a container starts, so a typo
+      # here surfaces in the middle of a deployment rather than in a pull
+      # request. Loading the file into the image the frontend actually ships
+      # is the cheapest place to find that out.
+      - name: Validate nginx configuration
+        run: >-
+          docker run --rm
+          -v "$PWD/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+          nginxinc/nginx-unprivileged:1.27-alpine nginx -t
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
