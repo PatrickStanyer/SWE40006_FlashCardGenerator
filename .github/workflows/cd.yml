@@ -145,6 +145,9 @@ jobs:
         env:
           BASE: http://${{ secrets.EC2_HOST }}:8080
           TAG: ${{ needs.build.outputs.image_tag }}
+          # Only to decide which generator this environment should be using.
+          # The value is never printed.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -eu
           curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/" > /dev/null
@@ -161,6 +164,18 @@ jobs:
           echo "$CARDS" | grep -q '"front"' \
             || { echo "Card generation did not return cards."; exit 1; }
           echo "Card generation reachable through the proxy."
+
+          # A rejected credential still returns 200 with a full deck, because
+          # generation falls back to the deterministic generator. Without this
+          # the pipeline cannot tell a working key from a broken one.
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            EXPECTED=model
+          else
+            EXPECTED=deterministic
+          fi
+          echo "$CARDS" | grep -q "\"source\":[[:space:]]*\"$EXPECTED\"" \
+            || { echo "This environment is configured for the $EXPECTED generator, but the deck did not come from it. A live call is failing and falling back silently."; exit 1; }
+          echo "Deck came from the $EXPECTED generator, as configured."
 
       # Browser-level check of the core user journey on the live Staging stack:
       # generate a deck, flip a card, navigate. The curl checks above prove the
@@ -270,6 +285,9 @@ jobs:
         env:
           BASE: http://${{ secrets.EC2_HOST }}
           TAG: ${{ needs.build.outputs.image_tag }}
+          # Only to decide which generator this environment should be using.
+          # The value is never printed.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -eu
           curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$BASE/" > /dev/null
@@ -286,3 +304,15 @@ jobs:
           echo "$CARDS" | grep -q '"front"' \
             || { echo "Card generation did not return cards."; exit 1; }
           echo "Card generation reachable through the proxy."
+
+          # A rejected credential still returns 200 with a full deck, because
+          # generation falls back to the deterministic generator. Without this
+          # the pipeline cannot tell a working key from a broken one.
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            EXPECTED=model
+          else
+            EXPECTED=deterministic
+          fi
+          echo "$CARDS" | grep -q "\"source\":[[:space:]]*\"$EXPECTED\"" \
+            || { echo "This environment is configured for the $EXPECTED generator, but the deck did not come from it. A live call is failing and falling back silently."; exit 1; }
+          echo "Deck came from the $EXPECTED generator, as configured."
