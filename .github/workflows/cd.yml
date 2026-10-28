@@ -276,6 +276,22 @@ jobs:
             docker pull "$BACKEND_IMAGE:$TAG"
             docker pull "$FRONTEND_IMAGE:$TAG"
 
+            # Prove the log driver works before anything is torn down. The
+            # teardown below happens before the containers are recreated, so a
+            # driver that cannot reach CloudWatch would leave production with
+            # nothing serving rather than simply failing the deployment. This
+            # throwaway container exits immediately and, under set -e, aborts
+            # the job while the previous stack is still up.
+            echo "Checking the CloudWatch log driver before replacing anything."
+            docker run --rm \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/production \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=preflight-$TAG \
+              "$BACKEND_IMAGE:$TAG" \
+              python -c "print('cloudwatch log driver reachable')"
+
             docker network create flashcard-production 2>/dev/null || true
 
             # flashcard-prod is the container name the earlier single-container
@@ -292,6 +308,11 @@ jobs:
               --network flashcard-production \
               --network-alias api \
               --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/production \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=api-$TAG \
               -e APP_VERSION="$TAG" \
               -e AI_MOCK_MODE=false \
               -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
@@ -303,6 +324,11 @@ jobs:
               --name flashcard-production-web \
               --network flashcard-production \
               --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/production \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=web-$TAG \
               -p 80:8080 \
               "$FRONTEND_IMAGE:$TAG"
 
