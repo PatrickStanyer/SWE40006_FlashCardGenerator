@@ -87,5 +87,9 @@ jobs:
 
              docker run -d \
                --name flashcard-prod \
+               --log-driver=awslogs \
+               --log-opt awslogs-region=ap-southeast-2 \
+               --log-opt awslogs-group=/flashcard/production \
+               --log-opt awslogs-stream=flashcard-prod \
                -p 80:80 \
                ghcr.io/patrickstanyer/flashcard:${{ needs.build.outputs.image_tag }}
