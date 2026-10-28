@@ -11,6 +11,16 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 # ---- Stage 2: lean runtime ----
 FROM python:3.11-slim-bookworm
 
+# Bring the base image's OS packages up to the patched versions, the same way
+# the frontend image does. A base tag is built once and then falls behind every
+# Debian security update published after it, which is how a fixed openssl
+# advisory turned the image scan red without anything in this project changing.
+# This runs before the unprivileged account exists, while the stage is root.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 # Unbuffered output so container logs reach docker logs immediately, and no
 # .pyc files written into a filesystem the app user does not own.
 ENV PYTHONDONTWRITEBYTECODE=1 \
