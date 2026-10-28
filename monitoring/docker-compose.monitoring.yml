@@ -1,0 +1,48 @@
+# Collector and dashboard for the counters the backend already publishes.
+#
+# This deliberately does not run on the EC2 host. That instance is a t3.micro
+# already carrying four application containers, and it has run out of disk once
+# during this project. Prometheus and Grafana are started wherever someone
+# wants to look, and they scrape the two deployed environments over HTTP, so
+# nothing has to be installed next to the application to see its behaviour.
+#
+#   docker compose -f monitoring/docker-compose.monitoring.yml up -d
+#   Prometheus  http://localhost:9090
+#   Grafana     http://localhost:3000   (admin / admin)
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: flashcard-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: flashcard-grafana
+    depends_on:
+      - prometheus
+    environment:
+      # Local tooling only, never exposed, so the default login stays.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

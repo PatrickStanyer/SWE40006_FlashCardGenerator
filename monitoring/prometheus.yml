@@ -1,0 +1,25 @@
+# Scrapes the counters the backend publishes on both deployed environments.
+#
+# The host is the one already printed in the project README, so nothing new is
+# disclosed by having it here. Point TARGET at a different address by editing
+# the two targets below if the instance is ever replaced.
+#
+# Thirty seconds is slow for a dashboard and fast enough for the thing this
+# exists to show: whether generation is still reaching the model, or has
+# quietly dropped back to the deterministic generator.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  external_labels:
+    project: flashcard-generator
+
+scrape_configs:
+  - job_name: flashcard
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["54.252.251.138:8080"]
+        labels:
+          environment: staging
+      - targets: ["54.252.251.138:80"]
+        labels:
+          environment: production

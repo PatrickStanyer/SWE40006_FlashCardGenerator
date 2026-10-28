@@ -1,0 +1,124 @@
+{
+  "uid": "flashcard-generation",
+  "title": "Flashcard generation",
+  "description": "Whether generation is reaching the model on each environment, and what it costs when it does.",
+  "tags": ["swe40006", "flashcard"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Scrape target up",
+      "description": "Zero means Prometheus cannot reach that environment at all.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"flashcard\"}",
+          "legendFormat": "{{environment}}"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "down", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "up", "color": "green", "index": 1 } } }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Running version",
+      "description": "The commit each environment was built from, as the service reports it.",
+      "gridPos": { "h": 5, "w": 8, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "flashcard_build_info",
+          "legendFormat": "{{environment}}  {{version}}",
+          "instant": true
+        }
+      ],
+      "options": { "colorMode": "none", "graphMode": "none", "textMode": "name" },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Share served by the deterministic generator",
+      "description": "Share of everything this container has generated that came from the offline path. One hundred percent on an environment with no key is expected. One hundred percent on an environment that has a key means the live call is failing and falling back silently. Counters reset when a deployment replaces the container, so this reads per release.",
+      "gridPos": { "h": 5, "w": 10, "x": 14, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (environment) (flashcard_decks_generated_total{source=\"deterministic\"}) / clamp_min(sum by (environment) (flashcard_decks_generated_total), 1)",
+          "legendFormat": "{{environment}}"
+        }
+      ],
+      "options": { "colorMode": "value", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "decimals": 0 },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Decks generated per minute, by path",
+      "description": "The deterministic series rising while the model series sits at zero is the signature of a fallback.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (environment, source) (rate(flashcard_decks_generated_total[10m])) * 60",
+          "legendFormat": "{{environment}} / {{source}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Average time to generate a deck, by path",
+      "description": "The model path sits near two seconds and the deterministic path near zero, so this separates a real call from a local computation.",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (environment, source) (rate(flashcard_generation_duration_seconds_sum[10m])) / clamp_min(sum by (environment, source) (rate(flashcard_generation_duration_seconds_count[10m])), 0.0001)",
+          "legendFormat": "{{environment}} / {{source}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } }
+    }
+  ]
+}

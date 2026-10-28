@@ -1,0 +1,13 @@
+# Grafana reads this at startup, so the stack comes up already wired.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    # Fixed uid so the dashboard JSON can reference it without being edited
+    # after every fresh start.
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
