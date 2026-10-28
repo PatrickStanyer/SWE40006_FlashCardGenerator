@@ -95,6 +95,23 @@ jobs:
             docker pull "$BACKEND_IMAGE:$TAG"
             docker pull "$FRONTEND_IMAGE:$TAG"
 
+            # Prove the log driver works before anything is torn down. The
+            # awslogs driver fails the whole docker run when it cannot reach
+            # CloudWatch, and the teardown below happens before the containers
+            # are recreated, so an unusable driver would leave this environment
+            # with nothing running rather than simply failing the deployment.
+            # This throwaway container exits immediately and, under set -e,
+            # aborts the job while the previous stack is still serving.
+            echo "Checking the CloudWatch log driver before replacing anything."
+            docker run --rm \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/staging \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=preflight-$TAG \
+              "$BACKEND_IMAGE:$TAG" \
+              python -c "print('cloudwatch log driver reachable')"
+
             # Staging and production each get their own bridge network, so the
             # two environments cannot reach one another's containers.
             docker network create flashcard-staging 2>/dev/null || true
@@ -120,6 +137,11 @@ jobs:
               --network flashcard-staging \
               --network-alias api \
               --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/staging \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=api-$TAG \
               -e APP_VERSION="$TAG" \
               -e AI_MOCK_MODE=false \
               -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
@@ -133,6 +155,11 @@ jobs:
               --name flashcard-staging-web \
               --network flashcard-staging \
               --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/staging \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=web-$TAG \
               -p 8080:8080 \
               "$FRONTEND_IMAGE:$TAG"
 
