@@ -86,5 +86,5 @@ def test_mock_mode_survives_a_trailing_newline(reload_config):
 
 def test_blank_numeric_settings_fall_back_instead_of_crashing(reload_config):
     cfg = reload_config(OPENAI_TIMEOUT="", OPENAI_MAX_RETRIES="\n")
-    assert cfg.OPENAI_TIMEOUT == 25.0
+    assert cfg.OPENAI_TIMEOUT == 45.0
     assert cfg.OPENAI_MAX_RETRIES == 1

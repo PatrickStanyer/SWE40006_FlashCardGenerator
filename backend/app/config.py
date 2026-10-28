@@ -48,15 +48,23 @@ OPENAI_BASE_URL = _env("OPENAI_BASE_URL")
 
 # How long one request may take, and how many times to retry it.
 #
-# Measured against Gemini's free tier for a four card deck: a flash-lite
-# model answered in 1.6s, the full flash model in 6s, and the newest and
-# largest flash model took 59s. Newer is not faster, so the model name is
-# configuration rather than a constant, and the ceiling has to allow for a
-# busy free tier without making someone wait through a stall.
+# The first measurements against Gemini's free tier, for a four card deck, were
+# 1.6s on a flash-lite model, 6s on the full flash model and 59s on the newest
+# and largest one. Newer is not faster, which is why the model name is
+# configuration rather than a constant.
 #
-# One retry rather than the client default of two keeps the worst case at
-# twice the ceiling instead of three times it.
-OPENAI_TIMEOUT = float(_env("OPENAI_TIMEOUT", "25"))
+# A later set of measurements on the same model and the same request size came
+# back between 10.3s and 22.4s, so the free tier varies by more than an order
+# of magnitude depending on the day. A 25 second ceiling left under three
+# seconds of headroom against that, and exceeding it is not a quiet event: the
+# request falls back to deterministic output, and the deployment check that
+# asserts the generation path then fails the release. The ceiling is therefore
+# set well clear of the slowest response seen rather than close to it.
+#
+# One retry rather than the client default of two keeps the worst case at twice
+# the ceiling instead of three times it. A caller that waits that long still
+# receives a usable deck, because the fallback returns immediately.
+OPENAI_TIMEOUT = float(_env("OPENAI_TIMEOUT", "45"))
 OPENAI_MAX_RETRIES = int(_env("OPENAI_MAX_RETRIES", "1"))
 
 # A missing key degrades the feature to deterministic mock output instead of
