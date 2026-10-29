@@ -68,10 +68,11 @@ test.describe('Deployed environment smoke test', () => {
 
     const question = await card.textContent();
 
-    // Flip reveals the answer.
+    // Flip reveals the answer ('Answer' on model decks, 'How to answer' on
+    // deterministic decks).
     await card.click();
     await expect(card).toHaveAttribute('aria-pressed', 'true');
-    await expect(card).toContainText('Answer');
+    await expect(card).toContainText(/Answer|How to answer/);
     expect(await card.textContent()).not.toBe(question);
 
     // Next moves on and resets to the question side.

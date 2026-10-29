@@ -1,0 +1,49 @@
+name: Continuous Uptime & Synthetic Probe
+
+# Runs every 3 minutes (and on manual dispatch) to verify that both Production
+# and Staging remain reachable and healthy between deployments, and that the
+# Prometheus telemetry endpoint continues serving counters.
+on:
+  schedule:
+    - cron: '*/3 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime-check:
+    name: Probe Production and Staging Health
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+    steps:
+      - name: Check Production /healthz and /metrics
+        run: |
+          set -eu
+          HOST="${EC2_HOST:-54.252.251.138}"
+
+          PROD_STATUS=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors "http://$HOST/healthz")
+          echo "Production /healthz: $PROD_STATUS"
+          echo "$PROD_STATUS" | grep -q '"status":[[:space:]]*"ok"' \
+            || { echo "Production health check did not report status ok."; exit 1; }
+
+          PROD_METRICS=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors "http://$HOST/metrics")
+          echo "$PROD_METRICS" | grep -q 'flashcard_decks_generated_total' \
+            || { echo "Production /metrics did not return expected Prometheus counters."; exit 1; }
+          echo "Production health and telemetry probes passed."
+
+      - name: Check Staging /healthz and /metrics
+        run: |
+          set -eu
+          HOST="${EC2_HOST:-54.252.251.138}"
+
+          STAGING_STATUS=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors "http://$HOST:8080/healthz")
+          echo "Staging /healthz: $STAGING_STATUS"
+          echo "$STAGING_STATUS" | grep -q '"status":[[:space:]]*"ok"' \
+            || { echo "Staging health check did not report status ok."; exit 1; }
+
+          STAGING_METRICS=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors "http://$HOST:8080/metrics")
+          echo "$STAGING_METRICS" | grep -q 'flashcard_decks_generated_total' \
+            || { echo "Staging /metrics did not return expected Prometheus counters."; exit 1; }
+          echo "Staging health and telemetry probes passed."

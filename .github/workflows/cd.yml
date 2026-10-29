@@ -112,6 +112,15 @@ jobs:
               "$BACKEND_IMAGE:$TAG" \
               python -c "print('cloudwatch log driver reachable')"
 
+            # Record the currently serving image tag before replacing the
+            # containers so the automated rollback step can restore the exact
+            # previous release if smoke or browser tests fail.
+            PREV_TAG=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' flashcard-staging-api 2>/dev/null | sed -n 's/^APP_VERSION=//p' || true)
+            if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
+              echo "$PREV_TAG" > /tmp/flashcard-staging-prev-tag
+              echo "Recorded previous staging tag for rollback: $PREV_TAG"
+            fi
+
             # Staging and production each get their own bridge network, so the
             # two environments cannot reach one another's containers.
             docker network create flashcard-staging 2>/dev/null || true
@@ -240,6 +249,66 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      - name: Rollback staging on test failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY,OPENAI_BASE_URL,OPENAI_MODEL
+          script: |
+            set -eu
+            echo "Staging verification failed! Initiating automated rollback..."
+            if [ ! -s /tmp/flashcard-staging-prev-tag ]; then
+              echo "No previous staging tag recorded in /tmp/flashcard-staging-prev-tag; cannot roll back."
+              exit 1
+            fi
+            PREV_TAG=$(cat /tmp/flashcard-staging-prev-tag)
+            echo "Rolling back staging to $PREV_TAG"
+
+            docker pull "$BACKEND_IMAGE:$PREV_TAG"
+            docker pull "$FRONTEND_IMAGE:$PREV_TAG"
+
+            docker rm -f flashcard-staging-api flashcard-staging-web 2>/dev/null || true
+
+            docker run -d \
+              --name flashcard-staging-api \
+              --network flashcard-staging \
+              --network-alias api \
+              --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/staging \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=api-$PREV_TAG-rollback \
+              -e APP_VERSION="$PREV_TAG" \
+              -e AI_MOCK_MODE=false \
+              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+              -e OPENAI_BASE_URL="${OPENAI_BASE_URL:-}" \
+              -e OPENAI_MODEL="${OPENAI_MODEL:-}" \
+              "$BACKEND_IMAGE:$PREV_TAG"
+
+            docker run -d \
+              --name flashcard-staging-web \
+              --network flashcard-staging \
+              --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/staging \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=web-$PREV_TAG-rollback \
+              -p 8080:8080 \
+              "$FRONTEND_IMAGE:$PREV_TAG"
+
+            echo "Staging rollback to $PREV_TAG completed successfully."
+
   deploy-production:
     name: Deploy to production
     needs:
@@ -291,6 +360,15 @@ jobs:
               --log-opt awslogs-stream=preflight-$TAG \
               "$BACKEND_IMAGE:$TAG" \
               python -c "print('cloudwatch log driver reachable')"
+
+            # Record the currently serving image tag before replacing the
+            # containers so the automated rollback step can restore the exact
+            # previous release if smoke or browser tests fail.
+            PREV_TAG=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' flashcard-production-api 2>/dev/null | sed -n 's/^APP_VERSION=//p' || true)
+            if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
+              echo "$PREV_TAG" > /tmp/flashcard-production-prev-tag
+              echo "Recorded previous production tag for rollback: $PREV_TAG"
+            fi
 
             docker network create flashcard-production 2>/dev/null || true
 
@@ -369,3 +447,97 @@ jobs:
           echo "$CARDS" | grep -q "\"source\":[[:space:]]*\"$EXPECTED\"" \
             || { echo "This environment is configured for the $EXPECTED generator, but the deck did not come from it. A live call is failing and falling back silently."; exit 1; }
           echo "Deck came from the $EXPECTED generator, as configured."
+
+      # Browser-level check of the core user journey on the live Production
+      # stack (:80) after promotion: generate a deck, flip a card, navigate.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: e2e
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: E2E smoke test production (Playwright)
+        working-directory: e2e
+        env:
+          BASE_URL: http://${{ secrets.EC2_HOST }}
+          EXPECTED_VERSION: ${{ needs.build.outputs.image_tag }}
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-production
+          path: e2e/playwright-report
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Rollback production on test failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: FRONTEND_IMAGE,BACKEND_IMAGE,OPENAI_API_KEY,OPENAI_BASE_URL,OPENAI_MODEL
+          script: |
+            set -eu
+            echo "Production verification failed! Initiating automated rollback..."
+            if [ ! -s /tmp/flashcard-production-prev-tag ]; then
+              echo "No previous production tag recorded in /tmp/flashcard-production-prev-tag; cannot roll back."
+              exit 1
+            fi
+            PREV_TAG=$(cat /tmp/flashcard-production-prev-tag)
+            echo "Rolling back production to $PREV_TAG"
+
+            docker pull "$BACKEND_IMAGE:$PREV_TAG"
+            docker pull "$FRONTEND_IMAGE:$PREV_TAG"
+
+            docker rm -f flashcard-prod flashcard-production-api flashcard-production-web 2>/dev/null || true
+
+            docker run -d \
+              --name flashcard-production-api \
+              --network flashcard-production \
+              --network-alias api \
+              --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/production \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=api-$PREV_TAG-rollback \
+              -e APP_VERSION="$PREV_TAG" \
+              -e AI_MOCK_MODE=false \
+              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+              -e OPENAI_BASE_URL="${OPENAI_BASE_URL:-}" \
+              -e OPENAI_MODEL="${OPENAI_MODEL:-}" \
+              "$BACKEND_IMAGE:$PREV_TAG"
+
+            docker run -d \
+              --name flashcard-production-web \
+              --network flashcard-production \
+              --restart unless-stopped \
+              --log-driver=awslogs \
+              --log-opt awslogs-region=ap-southeast-2 \
+              --log-opt awslogs-group=/flashcard/production \
+              --log-opt awslogs-create-group=true \
+              --log-opt awslogs-stream=web-$PREV_TAG-rollback \
+              -p 80:8080 \
+              "$FRONTEND_IMAGE:$PREV_TAG"
+
+            echo "Production rollback to $PREV_TAG completed successfully."
